@@ -17,7 +17,7 @@ const ROUTINE = [
   { day: "Lunes", name: "Press Militar Mancuernas",   sets_reps: "4x10", weight: "5kg",                            category: "hombros", image: IMG("Dumbbell_Shoulder_Press/0.jpg") },
   { day: "Lunes", name: "Elevaciones Laterales",      sets_reps: "4x15", weight: "5kg",                            category: "hombros", image: IMG("Side_Lateral_Raise/0.jpg") },
   { day: "Lunes", name: "Tríceps Polea Agarre V",     sets_reps: "3x12", weight: "50kg",                           category: "triceps", image: IMG("Triceps_Pushdown_-_V-Bar_Attachment/0.jpg") },
-  { day: "Lunes", name: "Extensión Tríceps Cuerda",   sets_reps: "3x15", weight: "30-40kg",                        category: "triceps", image: IMG("Triceps_Pushdown_-_Rope_Attachment/0.jpg") },
+  { day: "Lunes", name: "Tríceps Press Francés",      sets_reps: "3x15", weight: "5kg",                            category: "triceps", image: IMG("Lying_Triceps_Press/0.jpg") },
 
   // Martes — PULL
   { day: "Martes", name: "Jalón al Pecho Abierto",          sets_reps: "4x8",  weight: "30-40kg (a probar)",   category: "espalda", image: IMG("Wide-Grip_Lat_Pulldown/0.jpg") },

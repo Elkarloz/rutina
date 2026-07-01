@@ -38,3 +38,25 @@ export function parseTargetReps(s: string | null): number | null {
   const m = s.match(/[xX×]\s*(\d+)/);
   return m ? parseInt(m[1], 10) : null;
 }
+
+export function weekBounds(date = new Date()): { start: string; end: string } {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (x: Date) =>
+    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+
+export function weekNumber(date = new Date()): number {
+  const { start } = weekBounds(date);
+  const monday = new Date(start + "T00:00:00");
+  const jan1 = new Date(monday.getFullYear(), 0, 1);
+  const diff = monday.getTime() - jan1.getTime();
+  return Math.ceil((diff / 86400000 + jan1.getDay() + 1) / 7);
+}

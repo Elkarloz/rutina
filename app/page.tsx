@@ -1,24 +1,98 @@
 import { supabase, type Exercise } from "./lib/supabase";
 import { ExerciseCard, type LastLog } from "./components/ExerciseCard";
 import { DaySelector } from "./components/DaySelector";
-import { DAYS, todayDay } from "./lib/categories";
+import { DAYS, todayDay, weekBounds } from "./lib/categories";
 
 export const dynamic = "force-dynamic";
 
-type LogRow = LastLog & { session_id: number };
+type SessionInfo = { performed_at: string; day: string };
 
-async function getLastLogs(exerciseIds: number[]): Promise<Map<number, LastLog[]>> {
+function sessionInfo(raw: unknown): SessionInfo {
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  return s as SessionInfo;
+}
+
+type LogRow = LastLog & { session_id: number; performed_at?: string; day?: string };
+
+async function getWeekLogs(
+  exerciseIds: number[],
+  day: string,
+): Promise<Map<number, LastLog[]>> {
   const map = new Map<number, LogRow[]>();
   if (!exerciseIds.length) return new Map();
+
+  const { start, end } = weekBounds();
   const { data } = await supabase
     .from("exercise_logs")
-    .select("exercise_id, set_number, reps, weight_kg, session_id")
+    .select("exercise_id, set_number, reps, weight_kg, session_id, sessions!inner(performed_at, day)")
     .in("exercise_id", exerciseIds)
+    .eq("sessions.day", day)
+    .gte("sessions.performed_at", start)
+    .lte("sessions.performed_at", end)
     .order("session_id", { ascending: false });
+
   if (!data) return new Map();
+
   for (const log of data) {
     const eid = log.exercise_id as number;
     if (!map.has(eid)) map.set(eid, []);
+    const list = map.get(eid)!;
+    const sameSession = list.length > 0 && list[0].session_id === log.session_id;
+    if (list.length === 0 || sameSession) {
+      const session = sessionInfo(log.sessions);
+      list.push({
+        set_number: log.set_number,
+        reps: log.reps,
+        weight_kg: log.weight_kg,
+        session_id: log.session_id,
+        performed_at: session.performed_at,
+        day: session.day,
+      });
+    }
+  }
+
+  const out = new Map<number, LastLog[]>();
+  for (const [k, v] of map) {
+    out.set(
+      k,
+      v
+        .sort((a, b) => a.set_number - b.set_number)
+        .map(({ session_id, performed_at, day: _d, ...rest }) => rest),
+    );
+  }
+  return out;
+}
+
+async function getLastLogs(
+  exerciseIds: number[],
+  day: string,
+  weekStart: string,
+  weekEnd: string,
+): Promise<Map<number, LastLog[]>> {
+  const map = new Map<number, LogRow[]>();
+  if (!exerciseIds.length) return new Map();
+
+  const { data } = await supabase
+    .from("exercise_logs")
+    .select("exercise_id, set_number, reps, weight_kg, session_id, sessions!inner(performed_at, day)")
+    .in("exercise_id", exerciseIds)
+    .order("session_id", { ascending: false });
+
+  if (!data) return new Map();
+
+  for (const log of data) {
+    const eid = log.exercise_id as number;
+    const session = sessionInfo(log.sessions);
+    const inCurrentWeek =
+      session.day === day &&
+      session.performed_at >= weekStart &&
+      session.performed_at <= weekEnd;
+
+    if (!map.has(eid)) {
+      if (inCurrentWeek) continue;
+      map.set(eid, []);
+    }
+
     const list = map.get(eid)!;
     const sameSession = list.length > 0 && list[0].session_id === log.session_id;
     if (list.length === 0 || sameSession) {
@@ -30,6 +104,7 @@ async function getLastLogs(exerciseIds: number[]): Promise<Map<number, LastLog[]
       });
     }
   }
+
   const out = new Map<number, LastLog[]>();
   for (const [k, v] of map) {
     out.set(k, v.sort((a, b) => a.set_number - b.set_number).map(({ session_id, ...rest }) => rest));
@@ -40,6 +115,7 @@ async function getLastLogs(exerciseIds: number[]): Promise<Map<number, LastLog[]
 export default async function Home({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const sp = await searchParams;
   const day = sp.day && DAYS.includes(sp.day) ? sp.day : todayDay();
+  const { start, end } = weekBounds();
 
   const { data: exercises } = await supabase
     .from("exercises")
@@ -48,7 +124,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     .order("order_index");
 
   const list: Exercise[] = exercises ?? [];
-  const lastLogs = await getLastLogs(list.map(e => e.id));
+  const ids = list.map(e => e.id);
+  const [weekLogs, lastLogs] = await Promise.all([
+    getWeekLogs(ids, day),
+    getLastLogs(ids, day, start, end),
+  ]);
   const isToday = day === todayDay();
 
   const orderedDays = (() => {
@@ -95,6 +175,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
               <ExerciseCard
                 key={ex.id}
                 exercise={ex}
+                weekLogs={weekLogs.get(ex.id) ?? []}
                 lastLogs={lastLogs.get(ex.id) ?? []}
                 day={day}
               />

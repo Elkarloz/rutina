@@ -15,33 +15,46 @@ function parseWeightNumber(s: string | null): number | null {
 
 export function ExerciseCard({
   exercise,
+  weekLogs,
   lastLogs,
   day,
 }: {
   exercise: Exercise;
+  weekLogs: LastLog[];
   lastLogs: LastLog[];
   day: string;
 }) {
   const cat = CATEGORIES[exercise.category ?? "otros"] ?? CATEGORIES.otros;
   const setCount = parseSetCount(exercise.sets_reps);
   const targetReps = parseTargetReps(exercise.sets_reps);
-  const lastMaxWeight = lastLogs.length
-    ? Math.max(...lastLogs.map(l => l.weight_kg ?? 0))
+  const historyLogs = lastLogs.length > 0 ? lastLogs : weekLogs;
+  const lastMaxWeight = historyLogs.length
+    ? Math.max(...historyLogs.map(l => l.weight_kg ?? 0))
     : null;
-  const allHit = targetReps != null && lastLogs.length > 0 && lastLogs.every(l => (l.reps ?? 0) >= targetReps);
+  const allHit = targetReps != null && historyLogs.length > 0 && historyLogs.every(l => (l.reps ?? 0) >= targetReps);
   const suggested = lastMaxWeight != null
     ? (allHit ? lastMaxWeight + 2.5 : lastMaxWeight)
     : null;
   const templateWeight = parseWeightNumber(exercise.weight_template);
   const defaultWeight = suggested ?? templateWeight;
 
-  const [sets, setSets] = useState<SetInput[]>(
-    Array.from({ length: setCount }, (_, i) => ({
+  const [sets, setSets] = useState<SetInput[]>(() => {
+    if (weekLogs.length > 0) {
+      return Array.from({ length: setCount }, (_, i) => {
+        const saved = weekLogs.find(l => l.set_number === i + 1);
+        return {
+          set_number: i + 1,
+          reps: saved?.reps ?? null,
+          weight_kg: saved?.weight_kg ?? defaultWeight,
+        };
+      });
+    }
+    return Array.from({ length: setCount }, (_, i) => ({
       set_number: i + 1,
       reps: null,
       weight_kg: defaultWeight,
-    })),
-  );
+    }));
+  });
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
