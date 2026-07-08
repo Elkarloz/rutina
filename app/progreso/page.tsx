@@ -1,12 +1,11 @@
 import { supabase } from "../lib/supabase";
-import { PastWeekRow } from "../components/PastWeekRow";
-import { WeekDetail, type WeekDetailData } from "../components/WeekDetail";
+import { WeekNavigator } from "../components/WeekNavigator";
+import { type WeekDetailData } from "../components/WeekDetail";
 import {
   daySortOrder,
-  formatWeekRange,
   routineDayDate,
   weekBounds,
-  weekNumber,
+  weekFromStart,
   weekNumberFromDate,
 } from "../lib/categories";
 
@@ -139,9 +138,14 @@ function groupByWeeks(sessions: ExerciseSession[]): WeekDetailData[] {
     .sort((a, b) => b.start.localeCompare(a.start));
 }
 
-export default async function Progreso() {
-  const { start: currentStart, end: currentEnd } = weekBounds();
-  const currentWeekNum = weekNumber();
+export default async function Progreso({ searchParams }: { searchParams: Promise<{ semana?: string }> }) {
+  const sp = await searchParams;
+  const { start: currentStart } = weekBounds();
+
+  const selectedStart =
+    sp.semana && /^\d{4}-\d{2}-\d{2}$/.test(sp.semana) && sp.semana <= currentStart
+      ? sp.semana
+      : currentStart;
 
   const { data: logs } = await supabase
     .from("exercise_logs")
@@ -149,8 +153,8 @@ export default async function Progreso() {
     .order("session_id", { ascending: false });
 
   const weeks = groupByWeeks(groupSessions((logs ?? []) as unknown as LogRow[]));
-  const currentWeek = weeks.find(w => w.start === currentStart) ?? null;
-  const pastWeeks = weeks.filter(w => w.start !== currentStart);
+  const selectedWeek = weeks.find(w => w.start === selectedStart) ?? null;
+  const meta = selectedWeek ?? weekFromStart(selectedStart);
 
   return (
     <>
@@ -163,39 +167,13 @@ export default async function Progreso() {
         </div>
       </header>
 
-      <main className="pb-28 pt-20 px-5 space-y-4">
-        <section className="glass-card rounded-2xl overflow-hidden">
-          <header className="px-4 py-3 border-b border-white/5 bg-primary-fixed/10">
-            <div className="inline-block px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded-full uppercase tracking-widest mb-1.5">
-              Esta semana
-            </div>
-            <h2 className="font-display text-lg text-white uppercase font-bold leading-tight">
-              Semana {currentWeek?.week_number ?? currentWeekNum}
-            </h2>
-            <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">
-              {formatWeekRange(currentStart, currentEnd)}
-            </p>
-          </header>
-
-          {currentWeek ? (
-            <WeekDetail week={currentWeek} />
-          ) : (
-            <div className="px-4 py-6 text-on-surface-variant text-sm">
-              Sin registros esta semana. Loguea una sesión en Hoy.
-            </div>
-          )}
-        </section>
-
-        {pastWeeks.length > 0 && (
-          <section className="space-y-2">
-            <h2 className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold px-1">
-              Semanas anteriores
-            </h2>
-            {pastWeeks.map(week => (
-              <PastWeekRow key={week.start} week={week} />
-            ))}
-          </section>
-        )}
+      <main className="pb-28 pt-20 px-5">
+        <WeekNavigator
+          selectedStart={selectedStart}
+          currentStart={currentStart}
+          weekNumber={meta.week_number}
+          week={selectedWeek}
+        />
       </main>
 
       <nav className="fixed bottom-0 w-full z-50 bg-surface-container/90 backdrop-blur-2xl rounded-t-xl border-t border-white/5 flex justify-around items-center h-20 px-4">

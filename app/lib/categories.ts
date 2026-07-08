@@ -141,3 +141,17 @@ export function formatWeekRange(start: string, end: string): string {
       .replace(".", "");
   return `${fmt(s)} – ${fmt(e, true)}`;
 }
+
+export function shiftWeekStart(start: string, weeks: number): string {
+  const d = new Date(`${start}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + weeks * 7);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function weekFromStart(start: string): { start: string; end: string; week_number: number } {
+  return {
+    start,
+    end: shiftWeekStart(start, 6),
+    week_number: weekNumber(new Date(`${start}T12:00:00`)),
+  };
+}
