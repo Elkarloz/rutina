@@ -1,11 +1,12 @@
 import { supabase } from "../lib/supabase";
+import { PastWeekRow } from "../components/PastWeekRow";
+import { WeekDetail, type WeekDetailData } from "../components/WeekDetail";
 import {
-  CATEGORIES,
   daySortOrder,
-  formatShortDate,
   formatWeekRange,
   routineDayDate,
   weekBounds,
+  weekNumber,
   weekNumberFromDate,
 } from "../lib/categories";
 
@@ -31,19 +32,6 @@ type ExerciseSession = {
   week_number: number | null;
   notes: string | null;
   sets: { set_number: number; reps: number | null; weight_kg: number | null }[];
-};
-
-type DayEntry = {
-  day: string;
-  date: string;
-  exercises: ExerciseSession[];
-};
-
-type WeekEntry = {
-  week_number: number;
-  start: string;
-  end: string;
-  days: DayEntry[];
 };
 
 type SessionMeta = NonNullable<LogRow["sessions"]>;
@@ -99,8 +87,8 @@ function normalizeDate(dateStr: string): string {
   return dateStr.includes("T") ? dateStr.slice(0, 10) : dateStr;
 }
 
-function groupByWeeks(sessions: ExerciseSession[]): WeekEntry[] {
-  const weekMap = new Map<string, { week_number: number; start: string; end: string; dayMap: Map<string, DayEntry> }>();
+function groupByWeeks(sessions: ExerciseSession[]): WeekDetailData[] {
+  const weekMap = new Map<string, { week_number: number; start: string; end: string; dayMap: Map<string, WeekDetailData["days"][0]> }>();
 
   for (const session of sessions) {
     const date = new Date(
@@ -125,7 +113,13 @@ function groupByWeeks(sessions: ExerciseSession[]): WeekEntry[] {
         exercises: [],
       });
     }
-    week.dayMap.get(routineDay)!.exercises.push(session);
+    week.dayMap.get(routineDay)!.exercises.push({
+      session_id: session.session_id,
+      exercise_name: session.exercise_name,
+      category: session.category,
+      notes: session.notes,
+      sets: session.sets,
+    });
   }
 
   return [...weekMap.values()]
@@ -146,13 +140,17 @@ function groupByWeeks(sessions: ExerciseSession[]): WeekEntry[] {
 }
 
 export default async function Progreso() {
+  const { start: currentStart, end: currentEnd } = weekBounds();
+  const currentWeekNum = weekNumber();
+
   const { data: logs } = await supabase
     .from("exercise_logs")
     .select("exercise_id, set_number, reps, weight_kg, session_id, exercises(name, category), sessions(performed_at, day, week_number, notes)")
     .order("session_id", { ascending: false });
 
-  const sessions = groupSessions((logs ?? []) as unknown as LogRow[]);
-  const weeks = groupByWeeks(sessions);
+  const weeks = groupByWeeks(groupSessions((logs ?? []) as unknown as LogRow[]));
+  const currentWeek = weeks.find(w => w.start === currentStart) ?? null;
+  const pastWeeks = weeks.filter(w => w.start !== currentStart);
 
   return (
     <>
@@ -165,72 +163,38 @@ export default async function Progreso() {
         </div>
       </header>
 
-      <main className="pb-28 pt-20 px-5">
-        {weeks.length === 0 ? (
-          <div className="glass-card rounded-2xl p-6 text-on-surface-variant text-sm">
-            Sin registros aún. Loguea una sesión en Hoy y vuelve aquí.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {weeks.map(week => (
-              <section key={week.start} className="glass-card rounded-2xl overflow-hidden">
-                <header className="px-4 py-3 border-b border-white/5 bg-surface-container/50">
-                  <h2 className="font-display text-lg text-white uppercase font-bold leading-tight">
-                    Semana {week.week_number}
-                  </h2>
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">
-                    {formatWeekRange(week.start, week.end)}
-                  </p>
-                </header>
+      <main className="pb-28 pt-20 px-5 space-y-4">
+        <section className="glass-card rounded-2xl overflow-hidden">
+          <header className="px-4 py-3 border-b border-white/5 bg-primary-fixed/10">
+            <div className="inline-block px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded-full uppercase tracking-widest mb-1.5">
+              Esta semana
+            </div>
+            <h2 className="font-display text-lg text-white uppercase font-bold leading-tight">
+              Semana {currentWeek?.week_number ?? currentWeekNum}
+            </h2>
+            <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">
+              {formatWeekRange(currentStart, currentEnd)}
+            </p>
+          </header>
 
-                <div className="divide-y divide-white/5">
-                  {week.days.map(dayEntry => (
-                    <div key={`${week.start}-${dayEntry.day}`} className="px-4 py-3">
-                      <h3 className="text-sm text-primary-fixed font-bold uppercase tracking-wide mb-2">
-                        {dayEntry.day}
-                        <span className="text-on-surface-variant font-semibold normal-case tracking-normal ml-2">
-                          · {formatShortDate(dayEntry.date)}
-                        </span>
-                      </h3>
+          {currentWeek ? (
+            <WeekDetail week={currentWeek} />
+          ) : (
+            <div className="px-4 py-6 text-on-surface-variant text-sm">
+              Sin registros esta semana. Loguea una sesión en Hoy.
+            </div>
+          )}
+        </section>
 
-                      <div className="space-y-2">
-                        {dayEntry.exercises.map(ex => {
-                          const cat = CATEGORIES[ex.category ?? "otros"] ?? CATEGORIES.otros;
-                          const maxWeight = Math.max(...ex.sets.map(s => s.weight_kg ?? 0));
-                          return (
-                            <div key={ex.session_id} className="bg-surface-container-high rounded-xl px-3 py-2.5">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className={`material-symbols-outlined ${cat.accent}`} style={{ fontSize: 16 }}>
-                                  {cat.icon}
-                                </span>
-                                <span className="text-xs text-white font-semibold flex-1">{ex.exercise_name}</span>
-                                {maxWeight > 0 && (
-                                  <span className="text-[10px] text-primary-fixed font-bold">{maxWeight} kg máx</span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {ex.sets.map(set => (
-                                  <span
-                                    key={set.set_number}
-                                    className="text-[11px] bg-surface-container rounded px-2 py-0.5 text-on-surface-variant"
-                                  >
-                                    S{set.set_number}: {set.reps ?? "—"}×{set.weight_kg ?? "—"}kg
-                                  </span>
-                                ))}
-                              </div>
-                              {ex.notes && (
-                                <p className="text-[11px] text-on-surface-variant mt-1.5 italic">{ex.notes}</p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+        {pastWeeks.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold px-1">
+              Semanas anteriores
+            </h2>
+            {pastWeeks.map(week => (
+              <PastWeekRow key={week.start} week={week} />
             ))}
-          </div>
+          </section>
         )}
       </main>
 
