@@ -97,3 +97,33 @@ export function formatSessionDate(dateStr: string): string {
 export function weekNumberFromDate(dateStr: string): number {
   return weekNumber(new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`));
 }
+
+export function formatShortDate(dateStr: string): string {
+  const date = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`);
+  const formatted = new Intl.DateTimeFormat("es-CO", {
+    timeZone: TZ,
+    day: "numeric",
+    month: "short",
+  }).format(date);
+  return formatted.replace(".", "");
+}
+
+export function dayNameFromDate(dateStr: string): string {
+  const date = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`);
+  return DAYS[bogotaDayOfWeek(date)];
+}
+
+export function formatWeekRange(start: string, end: string): string {
+  const s = new Date(`${start}T12:00:00`);
+  const e = new Date(`${end}T12:00:00`);
+  const fmt = (d: Date, withYear = false) =>
+    new Intl.DateTimeFormat("es-CO", {
+      timeZone: TZ,
+      day: "numeric",
+      month: "short",
+      ...(withYear ? { year: "numeric" } : {}),
+    })
+      .format(d)
+      .replace(".", "");
+  return `${fmt(s)} – ${fmt(e, true)}`;
+}
