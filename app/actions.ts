@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { weekBounds, weekNumber } from "./lib/categories";
+import { weekBounds, weekNumber, todayDate } from "./lib/categories";
 import { supabase } from "./lib/supabase";
 
 export type SetInput = { set_number: number; reps: number | null; weight_kg: number | null };
@@ -36,12 +36,17 @@ export async function saveExerciseSession(input: {
     if (delErr) return { ok: false, error: delErr.message };
     await supabase
       .from("sessions")
-      .update({ notes: input.notes?.trim() || null })
+      .update({ notes: input.notes?.trim() || null, performed_at: todayDate() })
       .eq("id", sessionId);
   } else {
     const { data: session, error: sErr } = await supabase
       .from("sessions")
-      .insert({ day: input.day, notes: input.notes?.trim() || null, week_number: wn })
+      .insert({
+        day: input.day,
+        notes: input.notes?.trim() || null,
+        week_number: wn,
+        performed_at: todayDate(),
+      })
       .select()
       .single();
     if (sErr || !session) return { ok: false, error: sErr?.message ?? "Sin sesión" };

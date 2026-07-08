@@ -108,9 +108,23 @@ export function formatShortDate(dateStr: string): string {
   return formatted.replace(".", "");
 }
 
-export function dayNameFromDate(dateStr: string): string {
-  const date = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`);
-  return DAYS[bogotaDayOfWeek(date)];
+export function todayDate(): string {
+  const { year, month, day } = bogotaYMD();
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+export function routineDayDate(weekStart: string, routineDay: string): string {
+  const dayIndex = DAYS.indexOf(routineDay);
+  if (dayIndex < 0) return weekStart;
+  const offset = dayIndex === 0 ? 6 : dayIndex - 1;
+  const d = new Date(`${weekStart}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function daySortOrder(day: string): number {
+  const i = DAYS.indexOf(day);
+  return i <= 0 ? 7 : i;
 }
 
 export function formatWeekRange(start: string, end: string): string {

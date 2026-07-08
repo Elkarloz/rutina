@@ -1,5 +1,13 @@
 import { supabase } from "../lib/supabase";
-import { CATEGORIES, dayNameFromDate, formatShortDate, formatWeekRange, weekBounds, weekNumberFromDate } from "../lib/categories";
+import {
+  CATEGORIES,
+  daySortOrder,
+  formatShortDate,
+  formatWeekRange,
+  routineDayDate,
+  weekBounds,
+  weekNumberFromDate,
+} from "../lib/categories";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +35,7 @@ type ExerciseSession = {
 
 type DayEntry = {
   day: string;
-  performed_at: string;
+  date: string;
   exercises: ExerciseSession[];
 };
 
@@ -91,35 +99,33 @@ function normalizeDate(dateStr: string): string {
   return dateStr.includes("T") ? dateStr.slice(0, 10) : dateStr;
 }
 
-function isDateInWeek(dateStr: string, start: string, end: string): boolean {
-  const d = normalizeDate(dateStr);
-  return d >= start && d <= end;
-}
-
 function groupByWeeks(sessions: ExerciseSession[]): WeekEntry[] {
   const weekMap = new Map<string, { week_number: number; start: string; end: string; dayMap: Map<string, DayEntry> }>();
 
   for (const session of sessions) {
-    const date = new Date(session.performed_at.includes("T") ? session.performed_at : `${session.performed_at}T12:00:00`);
+    const date = new Date(
+      session.performed_at.includes("T") ? session.performed_at : `${session.performed_at}T12:00:00`,
+    );
     const { start, end } = weekBounds(date);
-    if (!isDateInWeek(session.performed_at, start, end)) continue;
+    const performedDate = normalizeDate(session.performed_at);
+    if (performedDate < start || performedDate > end) continue;
 
     const weekNum = session.week_number ?? weekNumberFromDate(session.performed_at);
-    const performedDate = normalizeDate(session.performed_at);
+    const routineDay = session.day;
 
     if (!weekMap.has(start)) {
       weekMap.set(start, { week_number: weekNum, start, end, dayMap: new Map() });
     }
 
     const week = weekMap.get(start)!;
-    if (!week.dayMap.has(performedDate)) {
-      week.dayMap.set(performedDate, {
-        day: dayNameFromDate(session.performed_at),
-        performed_at: performedDate,
+    if (!week.dayMap.has(routineDay)) {
+      week.dayMap.set(routineDay, {
+        day: routineDay,
+        date: routineDayDate(start, routineDay),
         exercises: [],
       });
     }
-    week.dayMap.get(performedDate)!.exercises.push(session);
+    week.dayMap.get(routineDay)!.exercises.push(session);
   }
 
   return [...weekMap.values()]
@@ -128,7 +134,7 @@ function groupByWeeks(sessions: ExerciseSession[]): WeekEntry[] {
       start: w.start,
       end: w.end,
       days: [...w.dayMap.values()]
-        .sort((a, b) => a.performed_at.localeCompare(b.performed_at))
+        .sort((a, b) => daySortOrder(a.day) - daySortOrder(b.day))
         .map(d => ({
           ...d,
           exercises: d.exercises.sort((a, b) => a.exercise_name.localeCompare(b.exercise_name)),
@@ -179,11 +185,11 @@ export default async function Progreso() {
 
                 <div className="divide-y divide-white/5">
                   {week.days.map(dayEntry => (
-                    <div key={`${week.start}-${dayEntry.performed_at}`} className="px-4 py-3">
+                    <div key={`${week.start}-${dayEntry.day}`} className="px-4 py-3">
                       <h3 className="text-sm text-primary-fixed font-bold uppercase tracking-wide mb-2">
                         {dayEntry.day}
                         <span className="text-on-surface-variant font-semibold normal-case tracking-normal ml-2">
-                          · {formatShortDate(dayEntry.performed_at)}
+                          · {formatShortDate(dayEntry.date)}
                         </span>
                       </h3>
 
