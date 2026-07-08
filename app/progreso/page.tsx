@@ -21,9 +21,11 @@ type SessionEntry = {
   sets: { set_number: number; reps: number | null; weight_kg: number | null }[];
 };
 
-function sessionInfo(raw: unknown): SessionEntry["sessions"] & object {
+type SessionMeta = NonNullable<LogRow["sessions"]>;
+
+function sessionInfo(raw: unknown): SessionMeta {
   const s = Array.isArray(raw) ? raw[0] : raw;
-  return s as SessionEntry["sessions"] & object;
+  return s as SessionMeta;
 }
 
 function groupSessions(logs: LogRow[]): SessionEntry[] {
