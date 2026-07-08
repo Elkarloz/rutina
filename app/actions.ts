@@ -34,13 +34,14 @@ export async function saveExerciseSession(input: {
     sessionId = existing[0].session_id as number;
     const { error: delErr } = await supabase.from("exercise_logs").delete().eq("session_id", sessionId);
     if (delErr) return { ok: false, error: delErr.message };
-    if (input.notes != null) {
-      await supabase.from("sessions").update({ notes: input.notes }).eq("id", sessionId);
-    }
+    await supabase
+      .from("sessions")
+      .update({ notes: input.notes?.trim() || null })
+      .eq("id", sessionId);
   } else {
     const { data: session, error: sErr } = await supabase
       .from("sessions")
-      .insert({ day: input.day, notes: input.notes ?? null, week_number: wn })
+      .insert({ day: input.day, notes: input.notes?.trim() || null, week_number: wn })
       .select()
       .single();
     if (sErr || !session) return { ok: false, error: sErr?.message ?? "Sin sesión" };

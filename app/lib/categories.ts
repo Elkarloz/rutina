@@ -23,8 +23,32 @@ export const CATEGORIES: Record<string, CategoryStyle> = {
 
 export const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
+const TZ = "America/Bogota";
+
+function bogotaYMD(date = new Date()): { year: number; month: number; day: number } {
+  const [year, month, day] = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .format(date)
+    .split("-")
+    .map(Number);
+  return { year, month, day };
+}
+
+function bogotaDayOfWeek(date = new Date()): number {
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(date);
+  return { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[weekday]!;
+}
+
 export function todayDay(): string {
-  return DAYS[new Date().getDay()];
+  return DAYS[bogotaDayOfWeek()];
+}
+
+export function todayDayIndex(): number {
+  return bogotaDayOfWeek();
 }
 
 export function parseSetCount(s: string | null): number {
@@ -40,16 +64,13 @@ export function parseTargetReps(s: string | null): number | null {
 }
 
 export function weekBounds(date = new Date()): { start: string; end: string } {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diffToMonday);
-  monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  const { year, month, day } = bogotaYMD(date);
+  const dow = bogotaDayOfWeek(date);
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(Date.UTC(year, month - 1, day + diffToMonday));
+  const sunday = new Date(Date.UTC(year, month - 1, day + diffToMonday + 6));
   const fmt = (x: Date) =>
-    `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}-${String(x.getUTCDate()).padStart(2, "0")}`;
   return { start: fmt(monday), end: fmt(sunday) };
 }
 
@@ -59,4 +80,20 @@ export function weekNumber(date = new Date()): number {
   const jan1 = new Date(monday.getFullYear(), 0, 1);
   const diff = monday.getTime() - jan1.getTime();
   return Math.ceil((diff / 86400000 + jan1.getDay() + 1) / 7);
+}
+
+export function formatSessionDate(dateStr: string): string {
+  const date = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`);
+  const formatted = new Intl.DateTimeFormat("es-CO", {
+    timeZone: TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+export function weekNumberFromDate(dateStr: string): number {
+  return weekNumber(new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`));
 }

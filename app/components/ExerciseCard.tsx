@@ -16,11 +16,13 @@ function parseWeightNumber(s: string | null): number | null {
 export function ExerciseCard({
   exercise,
   weekLogs,
+  weekNotes,
   lastLogs,
   day,
 }: {
   exercise: Exercise;
   weekLogs: LastLog[];
+  weekNotes: string | null;
   lastLogs: LastLog[];
   day: string;
 }) {
@@ -55,6 +57,7 @@ export function ExerciseCard({
       weight_kg: defaultWeight,
     }));
   });
+  const [notes, setNotes] = useState(weekNotes ?? "");
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +70,7 @@ export function ExerciseCard({
   function save() {
     setError(null);
     start(async () => {
-      const res = await saveExerciseSession({ exercise_id: exercise.id, day, sets });
+      const res = await saveExerciseSession({ exercise_id: exercise.id, day, sets, notes });
       if (res.ok) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
@@ -143,6 +146,14 @@ export function ExerciseCard({
             <span className="text-xs text-on-surface-variant w-7 shrink-0">kg</span>
           </div>
         ))}
+
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Notas (técnica, sensación, etc.)"
+          rows={2}
+          className="w-full bg-surface-container-high rounded-lg px-3 py-2 text-sm text-white placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-1 focus:ring-primary-fixed resize-none"
+        />
 
         <div className="flex items-center gap-2 pt-2">
           <button

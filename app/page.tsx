@@ -1,11 +1,11 @@
 import { supabase, type Exercise } from "./lib/supabase";
 import { ExerciseCard, type LastLog } from "./components/ExerciseCard";
 import { DaySelector } from "./components/DaySelector";
-import { DAYS, todayDay, weekBounds } from "./lib/categories";
+import { DAYS, todayDay, todayDayIndex, weekBounds } from "./lib/categories";
 
 export const dynamic = "force-dynamic";
 
-type SessionInfo = { performed_at: string; day: string };
+type SessionInfo = { performed_at: string; day: string; notes?: string | null };
 
 function sessionInfo(raw: unknown): SessionInfo {
   const s = Array.isArray(raw) ? raw[0] : raw;
@@ -61,6 +61,34 @@ async function getWeekLogs(
     );
   }
   return out;
+}
+
+async function getWeekNotes(
+  exerciseIds: number[],
+  day: string,
+): Promise<Map<number, string | null>> {
+  const map = new Map<number, string | null>();
+  if (!exerciseIds.length) return map;
+
+  const { start, end } = weekBounds();
+  const { data } = await supabase
+    .from("exercise_logs")
+    .select("exercise_id, session_id, sessions!inner(performed_at, day, notes)")
+    .in("exercise_id", exerciseIds)
+    .eq("sessions.day", day)
+    .gte("sessions.performed_at", start)
+    .lte("sessions.performed_at", end)
+    .order("session_id", { ascending: false });
+
+  if (!data) return map;
+
+  for (const log of data) {
+    const eid = log.exercise_id as number;
+    if (!map.has(eid)) {
+      map.set(eid, sessionInfo(log.sessions).notes ?? null);
+    }
+  }
+  return map;
 }
 
 async function getLastLogs(
@@ -125,16 +153,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
 
   const list: Exercise[] = exercises ?? [];
   const ids = list.map(e => e.id);
-  const [weekLogs, lastLogs] = await Promise.all([
+  const [weekLogs, weekNotes, lastLogs] = await Promise.all([
     getWeekLogs(ids, day),
+    getWeekNotes(ids, day),
     getLastLogs(ids, day, start, end),
   ]);
   const isToday = day === todayDay();
 
-  const orderedDays = (() => {
-    const t = new Date().getDay();
-    return [...Array(7)].map((_, i) => DAYS[(t + i) % 7]);
-  })();
+  const orderedDays = [...Array(7)].map((_, i) => DAYS[(todayDayIndex() + i) % 7]);
 
   return (
     <>
@@ -176,6 +202,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
                 key={ex.id}
                 exercise={ex}
                 weekLogs={weekLogs.get(ex.id) ?? []}
+                weekNotes={weekNotes.get(ex.id) ?? null}
                 lastLogs={lastLogs.get(ex.id) ?? []}
                 day={day}
               />
